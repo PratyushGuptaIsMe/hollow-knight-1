@@ -1,267 +1,356 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en-us">
-
-<head>
-    <base href="https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/">
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <head>
+    <base href="https://cdn.jsdelivr.net/gh/web-ports/hollow-knight@latest/" />
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Unity WebGL Player | Hollow Knight</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
+    <link rel="shortcut icon" href="TemplateData/favicon.ico" />
+    <link rel="stylesheet" href="TemplateData/style.css" />
     <style>
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden;
-            background: #231F20;
-        }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #231f20;
+      }
 
-        #unity-container {
-            width: 100%;
-            height: 100%;
-            position: fixed;
-            top: 0;
-            left: 0;
-        }
+      #unity-container {
+        width: 100%;
+        height: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+      }
 
+      #exportBtn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 6px 12px;
+        font-size: 12px;
+        background: #5f5555;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        z-index: 2147483647;
+      }
+      #importBtn {
+        position: fixed;
+        top: 20px;
+        right: 140px;
+        padding: 6px 12px;
+        font-size: 12px;
+        background: #5f5555;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        z-index: 2147483647;
+      }
     </style>
-</head>
+  </head>
 
-<body>
-    <button 
-        id="exportBtn"
-        style="
-            position:fixed;
-            top:20px;
-            right:20px;
-            padding:6px 12px;
-            font-size:12px;
-            background:#5f5555;
-            color:#fff;
-            border:none;
-            border-radius:4px;
-            cursor:pointer;
-            z-index:2147483647;
-        "
-        >
-        Export Save
-    </button>
+  <body>
+    <button id="exportBtn">Export Save</button>
+    <button id="importBtn">Import Save</button>
+
     <script>
-        const exportbtn = document.getElementById("exportBtn");
-        const pressed = new Set();
+      function exportSave() {
+        indexedDB.open("/idbfs").onsuccess = (e) => {
+          const db = e.target.result;
+          const tx = db.transaction("FILE_DATA", "readonly");
+          const store = tx.objectStore("FILE_DATA");
 
-        exportbtn.addEventListener('click', exportSave)
+          const req = store.getAll();
+          const keysReq = store.getAllKeys();
 
-        document.addEventListener("keydown", (e) => {
-            pressed.add(e.key.toLowerCase());
-
-            if (
-            pressed.has("u") &&
-            pressed.has("i") &&
-            pressed.has("o") &&
-            pressed.has("p")
-            ) {
-            exportbtn.style.display = exportbtn.style.display === "none" ? "block" : "none";
-            }
-        });
-
-        document.addEventListener("keyup", (e) => {
-            pressed.delete(e.key.toLowerCase());
-        });
-    </script>
-    <script>
-                function exportSave() {
-            indexedDB.open("/idbfs").onsuccess = e => {
-        const db = e.target.result;
-        const tx = db.transaction("FILE_DATA", "readonly");
-        const store = tx.objectStore("FILE_DATA");
-
-        const req = store.getAll();
-        const keysReq = store.getAllKeys();
-
-        req.onsuccess = () => {
+          req.onsuccess = () => {
             keysReq.onsuccess = () => {
-            const values = req.result;
-            const keys = keysReq.result;
+              const values = req.result;
+              const keys = keysReq.result;
 
-            const exportData = keys.map((key, i) => {
+              const exportData = keys.map((key, i) => {
                 const entry = values[i];
                 let contents = entry.contents;
 
                 // Convert Int8Array → object with numeric keys
                 if (contents instanceof Int8Array) {
-                const obj = {};
-                for (let j = 0; j < contents.length; j++) {
+                  const obj = {};
+                  for (let j = 0; j < contents.length; j++) {
                     obj[j] = contents[j];
-                }
-                contents = obj;
+                  }
+                  contents = obj;
                 }
 
                 return {
-                key: key,
-                value: {
+                  key: key,
+                  value: {
                     timestamp: entry.timestamp,
                     mode: entry.mode,
-                    contents: contents
-                }
+                    contents: contents,
+                  },
                 };
-            });
+              });
 
-            const blob = new Blob(
-                [JSON.stringify(exportData, null, 2)],
-                { type: "application/json" }
-            );
+              const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
 
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "hk-save-export.json";
-            a.click();
-            URL.revokeObjectURL(url);
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "hk-save-export.json";
+              a.click();
+              URL.revokeObjectURL(url);
 
-            console.log("✔️ Export complete");
+              console.log("✔️ Export complete");
             };
+          };
         };
-            };
-        }
+      }
+      async function importSave(file) {
+        if (!file) return console.error("❌ No file provided");
 
+        const reader = new FileReader();
+        reader.onload = async () => {
+          let entries;
+          try {
+            entries = JSON.parse(reader.result);
+          } catch (err) {
+            console.error("❌ Invalid JSON file", err);
+            return;
+          }
 
-    </script>
-    <div id="loading-text" style="color: white; font-size: 48px; font-family: cursive; text-align: center; margin-top: 20px;"> LOADING... </div>
-    <div hidden id="unity-container" class="unity-desktop">
-        <canvas id="unity-canvas"></canvas>
-        <div id="unity-loading-bar">
-            <div id="unity-logo"></div>
-            <div id="unity-progress-bar-empty">
-                <div id="unity-progress-bar-full"></div>
-            </div>
-        </div>
-        <div id="unity-mobile-warning"> WebGL builds are not supported on mobile devices. </div>
-    </div>
-    <script>
-        var loadingText = document.querySelector("#loading-text");
-        let totalBytes = 0;
-        let loadedBytes = 0;
-        async function getSize(url) {
-            try {
-                const res = await fetch(url, {
-                    method: "HEAD"
-                });
-                return parseInt(res.headers.get("Content-Length") || "0", 10);
-            } catch {
-                return 0;
-            }
-        }
-        async function fetchWithProgress(url) {
-            const response = await fetch(url);
-            const reader = response.body.getReader();
-            let chunks = [];
-            let received = 0;
-            while (true) {
-                const {
-                    done,
-                    value
-                } = await reader.read();
-                if (done) break;
-                received += value.length;
-                loadedBytes += value.length;
-                chunks.push(value);
-                let mbDone = (loadedBytes / (1024 * 1024)).toFixed(2);
-                let mbTotal = '860.36';
-                loadingText.textContent = `LOADING... ${mbDone} MB / ${mbTotal} MB`;
-            }
-            let fullBuffer = new Uint8Array(received);
-            let offset = 0;
-            for (let chunk of chunks) {
-                fullBuffer.set(chunk, offset);
-                offset += chunk.length;
-            }
-            return fullBuffer.buffer;
-        }
-        async function mergeFiles(fileParts) {
-            const buffers = await Promise.all(fileParts.map(part => fetchWithProgress(part)));
-            const mergedBlob = new Blob(buffers);
-            return URL.createObjectURL(mergedBlob);
-        }
+          const openReq = indexedDB.open("/idbfs");
+          openReq.onerror = (e) => console.error("❌ DB open failed:", e);
+          openReq.onsuccess = (e) => {
+            const db = e.target.result;
+            const tx = db.transaction("FILE_DATA", "readwrite");
+            const store = tx.objectStore("FILE_DATA");
 
-        function getParts(file, start, end) {
-            let parts = [];
-            for (let i = start; i <= end; i++) {
-                parts.push(file + ".part" + i);
-            }
-            return parts;
-        }
-        (async () => {
-            const allParts = [...getParts("Build/hk.data", 1, 42), ...getParts("Build/hk.wasm", 1, 2), ];
-            const sizes = await Promise.all(allParts.map(getSize));
-            totalBytes = sizes.reduce((a, b) => a + b, 0);
-            const [dataUrl, wasmurl] = await Promise.all([
-                mergeFiles(getParts("Build/hk.data", 1, 42)),
-                mergeFiles(getParts("Build/hk.wasm", 1, 2)),
-            ]);
-            var buildUrl = "Build";
-            var loaderUrl = buildUrl + "/hk.loader.js";
-            var config = {
-                dataUrl: dataUrl,
-                frameworkUrl: buildUrl + "/hk.framework.js",
-                codeUrl: wasmurl,
-                streamingAssetsUrl: "StreamingAssets",
-                companyName: "Team Cherry & Truffled",
-                productName: "Hollow Knight",
-                productVersion: "1.0",
-            };
-            var container = document.querySelector("#unity-container");
-            container.hidden = false;
-            var canvas = document.querySelector("#unity-canvas");
-            var loadingBar = document.querySelector("#unity-loading-bar");
-            var progressBarFull = document.querySelector("#unity-progress-bar-full");
-            var fullscreenButton = document.querySelector("#unity-fullscreen-button");
-            var mobileWarning = document.querySelector("#unity-mobile-warning");
-            if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-                container.className = "unity-mobile";
-                config.devicePixelRatio = 1;
-                mobileWarning.style.display = "block";
-                setTimeout(() => {
-                    mobileWarning.style.display = "none";
-                }, 5000);
-            } else {
-              if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-                var meta = document.createElement('meta');
-                meta.name = 'viewport';
-                meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-                document.getElementsByTagName('head')[0].appendChild(meta);
-                container.className = "unity-mobile";
-                canvas.className = "unity-mobile";
-            } else {
-                function resizeCanvas() {
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
-                    canvas.style.width = window.innerWidth + "px";
-                    canvas.style.height = window.innerHeight + "px";
+            store.getAllKeys().onsuccess = (ev) => {
+              const keys = ev.target.result;
+              if (!keys.length) return console.error("❌ No keys found in FILE_DATA");
+
+              const currentHash = keys[0].split("/")[2];
+
+              // Delete old hash keys
+              keys.forEach((k) => {
+                if (!k.includes(currentHash)) store.delete(k);
+              });
+
+              // Import entries
+              entries.forEach((entry) => {
+                const oldKey = entry.key;
+                const parts = oldKey.split("/");
+                parts[2] = currentHash;
+                const newKey = parts.join("/");
+
+                let contents = entry.value.contents;
+                if (contents && typeof contents === "object" && !(contents instanceof Int8Array)) {
+                  const idxs = Object.keys(contents)
+                    .map(Number)
+                    .sort((a, b) => a - b);
+                  const arr = new Int8Array(idxs.length);
+                  idxs.forEach((i) => (arr[i] = contents[i]));
+                  contents = arr;
                 }
-                resizeCanvas();
-                window.addEventListener('resize', resizeCanvas);
-            }
-            }
-            loadingBar.style.display = "block";
-            var script = document.createElement("script");
-            script.src = loaderUrl;
-            script.onload = () => {
-                createUnityInstance(canvas, config, (progress) => {
-                    progressBarFull.style.width = 100 * progress + "%";
-                }).then((unityInstance) => {
-                  loadingText.remove();
-                    loadingBar.style.display = "none";
-                    canvas.style.display = "block";
-                }).catch((message) => {
-                    alert(message);
-                });
-            };
-            document.body.appendChild(script);
-        })();
-    </script>
-</body>
 
+                store.put(
+                  {
+                    timestamp: new Date(entry.value.timestamp),
+                    mode: entry.value.mode,
+                    contents: contents,
+                  },
+                  newKey
+                );
+              });
+
+              tx.oncomplete = () => console.log("✔️ Import complete — refresh the page");
+              tx.onerror = (err) => console.error("❌ Transaction error:", err);
+            };
+          };
+        };
+
+        reader.readAsText(file);
+      }
+
+      const exportbtn = document.getElementById("exportBtn");
+      const importBtn = document.getElementById("importBtn");
+
+      // Hidden input element
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json,.txt,.dat,application/json";
+      input.style.display = "none";
+      document.body.appendChild(input);
+
+      const pressed = new Set();
+      input.onchange = () => {
+        const file = input.files[0];
+        if (file) importSave(file);
+      };
+
+      importBtn.onclick = () => input.click();
+
+      exportbtn.addEventListener("click", exportSave);
+      importBtn.addEventListener("click", importSave);
+
+      document.addEventListener("keydown", (e) => {
+        pressed.add(e.key.toLowerCase());
+
+        if (pressed.has("u") && pressed.has("i") && pressed.has("o") && pressed.has("p")) {
+          exportbtn.style.display = exportbtn.style.display === "none" ? "block" : "none";
+          importBtn.style.display = importBtn.style.display === "none" ? "block" : "none";
+        }
+      });
+
+      document.addEventListener("keyup", (e) => {
+        pressed.delete(e.key.toLowerCase());
+      });
+    </script>
+
+    <div
+      id="loading-text"
+      style="color: white; font-size: 48px; font-family: cursive; text-align: center; margin-top: 20px"
+    >
+      LOADING...
+    </div>
+    <div hidden id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-mobile-warning">WebGL builds are not supported on mobile devices.</div>
+    </div>
+
+    <script>
+      var loadingText = document.querySelector("#loading-text");
+      let totalBytes = 0;
+      let loadedBytes = 0;
+      async function getSize(url) {
+        try {
+          const res = await fetch(url, {
+            method: "HEAD",
+          });
+          return parseInt(res.headers.get("Content-Length") || "0", 10);
+        } catch {
+          return 0;
+        }
+      }
+      async function fetchWithProgress(url) {
+        const response = await fetch(url);
+        const reader = response.body.getReader();
+        let chunks = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          received += value.length;
+          loadedBytes += value.length;
+          chunks.push(value);
+          let mbDone = (loadedBytes / (1024 * 1024)).toFixed(2);
+          let mbTotal = "860.36";
+          loadingText.textContent = `LOADING... ${mbDone} MB / ${mbTotal} MB`;
+        }
+        let fullBuffer = new Uint8Array(received);
+        let offset = 0;
+        for (let chunk of chunks) {
+          fullBuffer.set(chunk, offset);
+          offset += chunk.length;
+        }
+        return fullBuffer.buffer;
+      }
+      async function mergeFiles(fileParts) {
+        const buffers = await Promise.all(fileParts.map((part) => fetchWithProgress(part)));
+        const mergedBlob = new Blob(buffers);
+        return URL.createObjectURL(mergedBlob);
+      }
+
+      function getParts(file, start, end) {
+        let parts = [];
+        for (let i = start; i <= end; i++) {
+          parts.push(file + ".part" + i);
+        }
+        return parts;
+      }
+      (async () => {
+        const allParts = [...getParts("Build/hk.data", 1, 42), ...getParts("Build/hk.wasm", 1, 2)];
+        const sizes = await Promise.all(allParts.map(getSize));
+        totalBytes = sizes.reduce((a, b) => a + b, 0);
+        const [dataUrl, wasmurl] = await Promise.all([
+          mergeFiles(getParts("Build/hk.data", 1, 42)),
+          mergeFiles(getParts("Build/hk.wasm", 1, 2)),
+        ]);
+        var buildUrl = "Build";
+        var loaderUrl = buildUrl + "/hk.loader.js";
+        var config = {
+          dataUrl: dataUrl,
+          frameworkUrl: buildUrl + "/hk.framework.js",
+          codeUrl: wasmurl,
+          streamingAssetsUrl: "StreamingAssets",
+          companyName: "Team Cherry & Truffled",
+          productName: "Hollow Knight",
+          productVersion: "1.0",
+        };
+        var container = document.querySelector("#unity-container");
+        container.hidden = false;
+        var canvas = document.querySelector("#unity-canvas");
+        var loadingBar = document.querySelector("#unity-loading-bar");
+        var progressBarFull = document.querySelector("#unity-progress-bar-full");
+        var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+        var mobileWarning = document.querySelector("#unity-mobile-warning");
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+          container.className = "unity-mobile";
+          config.devicePixelRatio = 1;
+          mobileWarning.style.display = "block";
+          setTimeout(() => {
+            mobileWarning.style.display = "none";
+          }, 5000);
+        } else {
+          if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            var meta = document.createElement("meta");
+            meta.name = "viewport";
+            meta.content =
+              "width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes";
+            document.getElementsByTagName("head")[0].appendChild(meta);
+            container.className = "unity-mobile";
+            canvas.className = "unity-mobile";
+          } else {
+            function resizeCanvas() {
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
+              canvas.style.width = window.innerWidth + "px";
+              canvas.style.height = window.innerHeight + "px";
+            }
+            resizeCanvas();
+            window.addEventListener("resize", resizeCanvas);
+          }
+        }
+        loadingBar.style.display = "block";
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+          createUnityInstance(canvas, config, (progress) => {
+            progressBarFull.style.width = 100 * progress + "%";
+          })
+            .then((unityInstance) => {
+              loadingText.remove();
+              loadingBar.style.display = "none";
+              canvas.style.display = "block";
+            })
+            .catch((message) => {
+              alert(message);
+            });
+        };
+        document.body.appendChild(script);
+      })();
+    </script>
+
+  </body>
 </html>
