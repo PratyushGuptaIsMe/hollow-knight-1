@@ -49,27 +49,85 @@
         Export Save
     </button>
     <script>
-    const exportbtn = document.getElementById("exportBtn");
-    const pressed = new Set();
+        const exportbtn = document.getElementById("exportBtn");
+        const pressed = new Set();
 
+        exportbtn.addEventListener('click', exportSave)
 
+        document.addEventListener("keydown", (e) => {
+            pressed.add(e.key.toLowerCase());
 
-    document.addEventListener("keydown", (e) => {
-        pressed.add(e.key.toLowerCase());
+            if (
+            pressed.has("u") &&
+            pressed.has("i") &&
+            pressed.has("o") &&
+            pressed.has("p")
+            ) {
+            exportbtn.style.display = exportbtn.style.display === "none" ? "block" : "none";
+            }
+        });
 
-        if (
-        pressed.has("u") &&
-        pressed.has("i") &&
-        pressed.has("o") &&
-        pressed.has("p")
-        ) {
-        exportbtn.style.display = exportbtn.style.display === "none" ? "block" : "none";
+        document.addEventListener("keyup", (e) => {
+            pressed.delete(e.key.toLowerCase());
+        });
+    </script>
+    <script>
+                function exportSave() {
+            indexedDB.open("/idbfs").onsuccess = e => {
+        const db = e.target.result;
+        const tx = db.transaction("FILE_DATA", "readonly");
+        const store = tx.objectStore("FILE_DATA");
+
+        const req = store.getAll();
+        const keysReq = store.getAllKeys();
+
+        req.onsuccess = () => {
+            keysReq.onsuccess = () => {
+            const values = req.result;
+            const keys = keysReq.result;
+
+            const exportData = keys.map((key, i) => {
+                const entry = values[i];
+                let contents = entry.contents;
+
+                // Convert Int8Array → object with numeric keys
+                if (contents instanceof Int8Array) {
+                const obj = {};
+                for (let j = 0; j < contents.length; j++) {
+                    obj[j] = contents[j];
+                }
+                contents = obj;
+                }
+
+                return {
+                key: key,
+                value: {
+                    timestamp: entry.timestamp,
+                    mode: entry.mode,
+                    contents: contents
+                }
+                };
+            });
+
+            const blob = new Blob(
+                [JSON.stringify(exportData, null, 2)],
+                { type: "application/json" }
+            );
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "hk-save-export.json";
+            a.click();
+            URL.revokeObjectURL(url);
+
+            console.log("✔️ Export complete");
+            };
+        };
+            };
         }
-    });
 
-    document.addEventListener("keyup", (e) => {
-        pressed.delete(e.key.toLowerCase());
-    });
+
     </script>
     <div id="loading-text" style="color: white; font-size: 48px; font-family: cursive; text-align: center; margin-top: 20px;"> LOADING... </div>
     <div hidden id="unity-container" class="unity-desktop">
