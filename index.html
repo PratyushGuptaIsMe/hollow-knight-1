@@ -30,6 +30,47 @@
 </head>
 
 <body>
+    <button 
+        id="exportBtn"
+        style="
+            position:fixed;
+            top:20px;
+            right:20px;
+            padding:6px 12px;
+            font-size:12px;
+            background:#5f5555;
+            color:#fff;
+            border:none;
+            border-radius:4px;
+            cursor:pointer;
+            z-index:2147483647;
+        "
+        >
+        Export Save
+    </button>
+    <script>
+    const exportbtn = document.getElementById("exportBtn");
+    const pressed = new Set();
+
+
+
+    document.addEventListener("keydown", (e) => {
+        pressed.add(e.key.toLowerCase());
+
+        if (
+        pressed.has("u") &&
+        pressed.has("i") &&
+        pressed.has("o") &&
+        pressed.has("p")
+        ) {
+        exportbtn.style.display = exportbtn.style.display === "none" ? "block" : "none";
+        }
+    });
+
+    document.addEventListener("keyup", (e) => {
+        pressed.delete(e.key.toLowerCase());
+    });
+    </script>
     <div id="loading-text" style="color: white; font-size: 48px; font-family: cursive; text-align: center; margin-top: 20px;"> LOADING... </div>
     <div hidden id="unity-container" class="unity-desktop">
         <canvas id="unity-canvas"></canvas>
